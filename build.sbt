@@ -14,15 +14,24 @@
  */
 
 
-val slf4jVersion      = "1.7.7"
-val kamonCore         = "io.kamon"                  %%  "kamon-core"            % "0.6.7"
-val elasticsearch     = "org.elasticsearch"         %   "elasticsearch"         % "2.4.3"
+val slf4jVersion = "1.7.7"
+val kamonCore = "io.kamon" %% "kamon-core" % "0.6.7"
+val elasticsearch = "org.elasticsearch" % "elasticsearch" % "5.3.0"
 
 lazy val root = (project in file("."))
   .settings(name := "kamon-elasticsearch")
   .settings(aspectJSettings: _*)
   .settings(
-      libraryDependencies ++=
-        compileScope(kamonCore, elasticsearch) ++
+    libraryDependencies ++=
+      compileScope(kamonCore, elasticsearch) ++
         providedScope(aspectJ) ++
         testScope(scalatest, akkaDependency("testkit").value, slf4jApi, slf4jnop))
+//  .settings(
+//    assemblyMergeStrategy in assembly := {
+//      case PathList("META-INF", xs@_*) => MergeStrategy.discard
+//      case x => MergeStrategy.first
+//    }
+//  )
+
+
+

@@ -37,24 +37,27 @@ class RequestInstrumentation {
   import RequestInstrumentation._
 
   @Pointcut("execution(* org.elasticsearch.client.ElasticsearchClient.execute*(..)) && args(action, request, listener)")
-  def onExecuteListener[Request <: ActionRequest[Request], Response <: ActionResponse, RequestBuilder <: ActionRequestBuilder[Request, Response, RequestBuilder]](action: Action[Request, Response, RequestBuilder], request: Request, listener: ActionListener[Response]): Unit = {}
+  def onExecuteListener[Request <: ActionRequest, Response <: ActionResponse, RequestBuilder <: ActionRequestBuilder[Request, Response, RequestBuilder]](action: Action[Request, Response, RequestBuilder], request: Request, listener: ActionListener[Response]): Unit = {}
 
   @Around("onExecuteListener(action, request, listener) ")
-  def aroundExecuteListener[Request <: ActionRequest[Request], Response <: ActionResponse, RequestBuilder <: ActionRequestBuilder[Request, Response, RequestBuilder]](pjp: ProceedingJoinPoint, action: Action[Request, Response, RequestBuilder], request: Request, listener: ActionListener[Response]): Unit = {
-    Tracer.currentContext.collect { ctx ⇒
+  def aroundExecuteListener[Request <: ActionRequest, Response <: ActionResponse, RequestBuilder <: ActionRequestBuilder[Request, Response, RequestBuilder]](pjp: ProceedingJoinPoint, action: Action[Request, Response, RequestBuilder], request: Request, listener: ActionListener[Response]): Unit = {
+
+
+    Tracer.currentContext.collect { ctx =>
       implicit val requestRecorder = Kamon.metrics.entity(RequestsMetrics, "elasticsearch-requests")
       val segment = generateSegment(ctx, request)
       val start = System.nanoTime()
 
       pjp.proceed(Array(action, request, new ActionListener[Response] {
-        def onFailure(e: Throwable): Unit = { requestRecorder.errors.increment(); segment.finish(); listener.onFailure(e) }
+
+        def onFailure(e: Exception): Unit = { requestRecorder.errors.increment(); segment.finish(); listener.onFailure(e) }
+
         def onResponse(response: Response): Unit = { recordTrace(request, response, start); segment.finish(); listener.onResponse(response) }
       }))
-
     }
   } getOrElse pjp.proceed()
 
-  def recordTrace[Request <: ActionRequest[Request], Response <: ActionResponse](request: Request, response: Response, start: Long)(implicit requestRecorder: RequestsMetrics) {
+  def recordTrace[Request <: ActionRequest, Response <: ActionResponse](request: Request, response: Response, start: Long)(implicit requestRecorder: RequestsMetrics) {
     val timeSpent = System.nanoTime() - start
     request match {
       case r: get.GetRequest       ⇒ requestRecorder.reads.record(timeSpent)
@@ -62,6 +65,7 @@ class RequestInstrumentation {
       case r: index.IndexRequest   ⇒ requestRecorder.writes.record(timeSpent)
       case r: update.UpdateRequest ⇒ requestRecorder.writes.record(timeSpent)
       case r: delete.DeleteRequest ⇒ requestRecorder.writes.record(timeSpent)
+      case r: bulk.BulkRequest     ⇒ requestRecorder.writes.record(timeSpent)
       case _ ⇒
         log.debug(s"Unable to parse request [$request]")
     }
@@ -74,7 +78,7 @@ class RequestInstrumentation {
     }
   }
 
-  def generateSegment(ctx: TraceContext, request: ActionRequest[_]) = {
+  def generateSegment(ctx: TraceContext, request: ActionRequest) = {
     val segmentName = ElasticsearchExtension.generateElasticsearchSegmentName(request)
     val segment = ctx.startSegment(segmentName, SegmentCategory.Database, ElasticsearchExtension.SegmentLibraryName)
     segment

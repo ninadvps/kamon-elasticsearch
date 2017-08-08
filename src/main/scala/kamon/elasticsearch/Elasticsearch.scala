@@ -39,25 +39,25 @@ object ElasticsearchExtension {
 
   val slowQueryThreshold = config.getFiniteDuration("slow-query-threshold").toMillis
 
-  def processSlowQuery(request: ActionRequest[_], executionTime: Long) = slowQueryProcessor.process(request, executionTime, slowQueryThreshold)
-  def processSqlError(request: ActionRequest[_], ex: Throwable) = elasticsearchErrorProcessor.process(request, ex)
-  def generateElasticsearchSegmentName(request: ActionRequest[_]): String = nameGenerator.generateElasticsearchSegmentName(request)
+  def processSlowQuery(request: ActionRequest, executionTime: Long) = slowQueryProcessor.process(request, executionTime, slowQueryThreshold)
+  def processSqlError(request: ActionRequest, ex: Throwable) = elasticsearchErrorProcessor.process(request, ex)
+  def generateElasticsearchSegmentName(request: ActionRequest): String = nameGenerator.generateElasticsearchSegmentName(request)
 }
 
 trait SlowRequestProcessor {
-  def process(request: ActionRequest[_], executionTime: Long, queryThreshold: Long): Unit
+  def process(request: ActionRequest, executionTime: Long, queryThreshold: Long): Unit
 }
 
 trait ElasticsearchErrorProcessor {
-  def process(request: ActionRequest[_], ex: Throwable): Unit
+  def process(request: ActionRequest, ex: Throwable): Unit
 }
 
 trait ElasticsearchNameGenerator {
-  def generateElasticsearchSegmentName(request: ActionRequest[_]): String
+  def generateElasticsearchSegmentName(request: ActionRequest): String
 }
 
 class DefaultElasticsearchNameGenerator extends ElasticsearchNameGenerator {
-  def generateElasticsearchSegmentName(request: ActionRequest[_]): String = s"Elasticsearch[${request.getClass.getSimpleName}]"
+  def generateElasticsearchSegmentName(request: ActionRequest): String = s"Elasticsearch[${request.getClass.getSimpleName}]"
 }
 
 class DefaultElasticsearchErrorProcessor extends ElasticsearchErrorProcessor {
@@ -66,7 +66,7 @@ class DefaultElasticsearchErrorProcessor extends ElasticsearchErrorProcessor {
 
   val log = LoggerFactory.getLogger(classOf[DefaultElasticsearchErrorProcessor])
 
-  override def process(request: ActionRequest[_], cause: Throwable): Unit = {
+  override def process(request: ActionRequest, cause: Throwable): Unit = {
     log.error(s"the request [$request] failed with exception [${cause.getMessage}]")
   }
 }
@@ -76,7 +76,7 @@ class DefaultSlowRequestProcessor extends SlowRequestProcessor {
 
   val log = LoggerFactory.getLogger(classOf[DefaultSlowRequestProcessor])
 
-  override def process(request: ActionRequest[_], executionTimeInMillis: Long, queryThresholdInMillis: Long): Unit = {
+  override def process(request: ActionRequest, executionTimeInMillis: Long, queryThresholdInMillis: Long): Unit = {
     log.warn(s"The request [$request] took $executionTimeInMillis ms and the slow query threshold is $queryThresholdInMillis ms")
   }
 }
